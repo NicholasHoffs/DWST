@@ -1,1 +1,3 @@
 Maybe use sphinx for documentation?
+
+Append beginning of wavetable to end
