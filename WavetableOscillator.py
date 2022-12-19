@@ -36,7 +36,6 @@ class Wavetable_Oscillator:
 
     def get_sample(self, ix):
         
-        
         #figure out to do w/ numpy - should be very easy
         value_low = self.wavetable[int(np.floor(ix)) % self.wavetable_len]
         value_high = self.wavetable[int(np.ceil(ix)) % self.wavetable_len] 
@@ -58,5 +57,6 @@ class Wavetable_Oscillator:
         output = self.amp * output
 
         return output
+
 def write_to_sound(path,sr,output):
     write(path, rate=sr, data=output)
