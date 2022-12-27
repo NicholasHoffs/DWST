@@ -23,17 +23,7 @@ class Wavetable_Oscillator:
         self.index_incremenent=self.wavetable_len*self.freq/self.sr
 
         self.data = self.sound_gen()
-        
-    #too dumb for this
-    #@property
-    #def freq(self):
-    #    return self.freq
-
-    #@freq.setter
-    #def set_freq(self, freq):
-    #    self.freq=freq
-    #    self.index_increment=self.wavetable_len*self.freq/self.sr
-
+    
     def get_sample(self, ix):
         
         #figure out to do w/ numpy - should be very easy
