@@ -1,26 +1,60 @@
-from librosa import perceptual_weighting, db_to_amplitude
-from utils import stft
-from nnAudio.librosa_functions import fft_frequencies
+from librosa import A_weighting, db_to_amplitude, stft, fft_frequencies, load
 import numpy as np
-from torch import tensor
+from torch import tensor, stft
+
+def power_to_db(power, ref_db=0.0, range_db=80):
+  """Converts power from linear scale to decibels."""
+  
+
+  # Convert to decibels.
+  pmin = 10**-(range_db / 10.0)
+  power = np.maximum(pmin, power)
+  db = 10.0 * np.log10(power)
+
+  # Set dynamic range.
+  db -= ref_db
+  db = np.maximum(db, -range_db)
+  return db
+
+def compute_loudness(audio,
+                     sample_rate=16000,
+                     hop_length=64,
+                     n_fft=512,
+                     range_db=80,
+                     ref_db=0.0,
+                     padding='center'):
 
 
+# Temporarily a batch dimension for single examples.
+  is_1d = (len(audio.shape) == 1)
+  audio = audio[np.newaxis, :] if is_1d else audio
 
-def loudness(signal, sample_rate, n_fft=2048, hop_length=None, window_length = 2048):
-    signal = tensor(signal)
-    hop_length=window_length//4
-    #find proper stft parameters
-    spec = stft(signal, sample_rate, n_fft, window_length=window_length).abs()
-    fft_freq = fft_frequencies(sample_rate, n_fft)
-    spec = spec[:,:,:,:-1]
-    spec = spec.squeeze()
+  # Take STFT.
+  s = stft(audio, n_fft=n_fft, hop_length=hop_length)
 
-    # print("Spectogram size: {}\n FFT_Freq size: {}".format(np.shape(spec), np.shape(fft_freq)))
-    adj_spec = perceptual_weighting(spec**2, fft_freq)
-    adj_linear_spec = db_to_amplitude(adj_spec)
-    mean = np.mean(adj_linear_spec, axis=0)
-    print(np.shape(mean))
-    #small addition prevents overflow
-    compressed_mean = np.log10(mean+10**(-5))
+  # Compute power.
+  amplitude = np.abs(s).squeeze()
+  amplitude = amplitude[:, :, :-1]
+  power = amplitude**2
 
-    return compressed_mean
+  # Perceptual weighting.
+  frequencies = fft_frequencies(sr=sample_rate, n_fft=n_fft)
+  a_weighting = A_weighting(frequencies)[np.newaxis, np.newaxis, :]
+  # Perform weighting in linear scale, a_weighting given in decibels.
+  weighting = 10**(a_weighting/10)
+  power = power * weighting
+
+  # Average over frequencies (weighted power per a bin).
+  avg_power = np.mean(power, axis=-1)
+  loudness = power_to_db(avg_power,
+                              ref_db=ref_db,
+                              range_db=range_db)
+
+  return loudness
+
+if __name__ == "__main__":
+    y, sr = load('./test_audio/mallet_acoustic_074-072-050.wav')
+    y=tensor(y)
+    loudness = compute_loudness(y,sample_rate=sr)
+
+    print(loudness.shape)

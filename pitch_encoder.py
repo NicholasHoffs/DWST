@@ -1,15 +1,16 @@
 from crepe import predict
+import numpy as np
 
-def pitch(signal, sampling_rate, block_size, model_capacity="full"):
-    length = signal.shape[-1] // block_size
+def pitch(signal, sampling_rate, hop_size, model_capacity="full"):
+    length = signal.shape[-1] // hop_size
     f0 = predict(
         signal,
         sampling_rate,
-        step_size=int(1000 * block_size / sampling_rate),
+        step_size=int(1000 * hop_size / sampling_rate),
         verbose=1,
         center=True,
         viterbi=True,
-        model_capacity="full"
+        model_capacity="medium"
     )
     f0 = f0[1].reshape(-1)[:-1]
 

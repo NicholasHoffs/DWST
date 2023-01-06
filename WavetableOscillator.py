@@ -1,52 +1,78 @@
 import numpy as np
 from scipy.io.wavfile import write
+import torch.nn as nn
+import torch
+from torch.nn import TransformerDecoder
 
-#this creates a one cycle loop with any function
-def create_wavetable(func, len, init_phase):
+def create_wavetable(func, len, init_phase, freq):
     wavetable = np.zeros((len,))
     for i in range(len):
         wavetable[i] = func(
-            2*np.pi*i/len +
-            2*np.pi*init_phase #this should be between 0 and 1, putting 1/2 is like pi because 2pi*phase
+            freq * 2*np.pi*i/len +
+            2*np.pi*init_phase 
             )
-    return wavetable
+    return torch.tensor(wavetable)
 
-class Wavetable_Oscillator:
-    def __init__(self, wavetable, freq, amp, sr, duration):
-        self.wavetable=wavetable
-        self.freq=freq
-        self.amp=amp
-        self.sr=sr
-        self.duration = duration
+def full_oscillator(wt, freq, sample_rate, duration):
+    index_increment = wt.shape[0]*freq/sample_rate
+    n_samples = sample_rate*duration
+    indices = torch.arange(0,sample_rate*duration*index_increment, index_increment)
+    indices = indices % wt.shape[0]
+    low = torch.floor(indices.clone()).long()
+    frac_ix = indices-low
 
-        self.wavetable_len=np.shape(self.wavetable)[0]
-        self.index_incremenent=self.wavetable_len*self.freq/self.sr
+    return wt[low] + frac_ix*(wt[(low+1) % wt.shape[0]]-wt[low])
 
-        self.data = self.sound_gen()
+class Wavetable_Synth(nn.Module):
+    #can use pre-defined wavetables or not
+    def __init__(self, sample_rate=16000, wt=None, n_wt = 20, wt_len=512,  duration=4):
+        super(Wavetable_Synth, self).__init__()
+        self.sample_rate = sample_rate
+        self.wt = [] if wt is None else wt
+        self.n_wt = n_wt
+        self.wt_len = wt_len
+
+        #DO TRANSFORMER DECODER ON PHASE AND AMPLITUDE
+
+        self.TransformerDecoder
+
+        for _ in range(n_wt):
+                cur = nn.Parameter(torch.empty(self.wt_len).normal_(mean=0, std=0.01))
+                self.wt.append(cur)
+
+        self.wt = nn.ParameterList(self.wt)
+
+        if self.wt == None:
+            for i in range(n_wt):
+                if i==0:
+                    self.wt[i] = create_wavetable(np.sin, wt_len, np.random.uniform(0,1), 1)
+                    self.wt[i] = self.append_first_to_end(self.wt[i])
+                    self.wt.require
+                elif i==1:
+                    self.wt[i] = create_wavetable(np.sin, wt_len, np.random.uniform(0,1), 2)
+                    self.wt[i] = self.append_first_to_end(self.wt[i])                    
+                elif i==2:
+                    self.wt[i] = create_wavetable(np.sin, wt_len, np.random.uniform(0,1), 3)
+                    self.wt[i] = self.append_first_to_end(self.wt[i])
+                elif i==3:
+                    self.wt[i] = create_wavetable(np.sin, wt_len, np.random.uniform(0,1), 4)
+                    self.wt[i] = self.append_first_to_end(self.wt[i])
+
+                else:
+                    self.wt[i] = self.append_first_to_end(self.wt[i])
     
-    def get_sample(self, ix):
-        
-        #figure out to do w/ numpy - should be very easy
-        value_low = self.wavetable[int(np.floor(ix)) % self.wavetable_len]
-        value_high = self.wavetable[int(np.ceil(ix)) % self.wavetable_len] 
+    def append_first_to_end(self, wt):
+        return torch.cat([wt[:-1], wt[0].unsqueeze(-1)], dim=-1)
 
-        value = (value_low+value_high)/2
+    def forward(self, pitch, amp):
+        pass
 
-        return value
+    # def forward(self, pitch, amplitude):
+            
 
-    def sound_gen(self):
-        output_len = self.sr*self.duration
-        output = np.zeros(output_len)
-        
-        ix = 0
+if __name__ == '__main__':
+    wt = create_wavetable(np.sin, 512, 0, 1)
 
-        for i in range(output_len):
-            output[i]=self.get_sample(ix)
-            ix+=self.index_incremenent 
-        
-        output = self.amp * output
-
-        return output
-
-def write_to_sound(path,sr,output):
-    write(path, rate=sr, data=output)
+    output = full_oscillator(wt, 440, 16000, 3)
+    output = np.array(output)
+    write('./test_audio/test_oscillator.wav',16000, output)
